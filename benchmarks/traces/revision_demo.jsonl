@@ -1,0 +1,6 @@
+{"session_id":"demo","segment_id":"budget","revision":41,"type":"append_partial","text":"budget is fifty","start_ms":0,"end_ms":800,"confidence":0.72,"client_epoch":1,"seq_no":1}
+{"session_id":"demo","segment_id":"budget","revision":42,"type":"revise_partial","text":"budget is one hundred fifty thousand","start_ms":0,"end_ms":1200,"confidence":0.86,"client_epoch":1,"seq_no":2}
+{"session_id":"demo","segment_id":"budget","revision":43,"type":"commit_final","text":"budget is one hundred fifty thousand","start_ms":0,"end_ms":1400,"confidence":0.97,"client_epoch":1,"seq_no":3}
+{"session_id":"demo","segment_id":"date","revision":1,"type":"append_partial","text":"the review is on thursday","start_ms":1500,"end_ms":2400,"confidence":0.81,"client_epoch":1,"seq_no":4}
+{"session_id":"demo","segment_id":"date","revision":2,"type":"commit_final","text":"the review is on friday","start_ms":1500,"end_ms":2600,"confidence":0.96,"client_epoch":1,"seq_no":5}
+
