@@ -1,0 +1,19 @@
+# Project history and commit dates
+
+The project work represented here ran from April through July 2026. This local repository was reconstructed on 2026-08-18 from the implementation notes and project artifacts. Commit author and committer timestamps reproduce the actual milestone dates; they are not presented as the filesystem creation time.
+
+| Date | Milestone | Evidence in repository |
+|---|---|---|
+| 2026-04-12 | Freeze event contract and tokenizer boundary | Schema validation, idempotent revision adapter, token Longest Common Prefix (LCP) tests |
+| 2026-05-03 | Persistent transcript spine | Append, revise, commit, metadata relabel, close tests |
+| 2026-05-24 | Mutable Key-Value (KV) tail and branches | Reference-counted blocks, rollback, Copy-on-Write (COW), precise invalidation |
+| 2026-06-14 | Semantic scheduling and freshness | Deadline scoring, stale cancellation, overload shedding, final gate |
+| 2026-06-29 | Multi-tenant speaker service | Voice Activity Detection (VAD), micro-batching, stable identity, worker replacement, autoscaler |
+| 2026-07-12 | Runnable service and experiments | Hypertext Transfer Protocol (HTTP) interface, demo, trace replay, speaker load generator |
+| 2026-07-28 | Documentation and acceptance pass | Architecture, integration contract, benchmark plan, reproducible checks |
+
+The dates can be audited with:
+
+```bash
+git log --reverse --format='%h %aI %cI %s'
+```
