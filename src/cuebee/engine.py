@@ -6,8 +6,9 @@ import hashlib
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,30 @@ class EngineResult:
     output_tokens: int
 
 
+@dataclass(frozen=True, slots=True)
+class SessionRevisionUpdate:
+    """Token-level session update for an in-process versioned engine."""
+
+    session_id: str
+    version: int
+    replace_from: int
+    replacement_token_ids: tuple[int, ...]
+    commit_frontier: int
+    tentative: bool
+    base_version: int | None = None
+    branch_id: str = "main"
+
+    def __post_init__(self) -> None:
+        if not self.session_id or not self.branch_id:
+            raise ValueError("session_id and branch_id must not be empty")
+        if self.version < 0 or self.replace_from < 0 or self.commit_frontier < 0:
+            raise ValueError("version and token offsets must be non-negative")
+        if self.base_version is not None and self.base_version >= self.version:
+            raise ValueError("base_version must be lower than version")
+        if not self.replacement_token_ids:
+            raise ValueError("replacement_token_ids must not be empty")
+
+
 class InferenceEngine(Protocol):
     def prefill(
         self,
@@ -42,11 +67,16 @@ class InferenceEngine(Protocol):
     def abort(self, request_id: str) -> bool: ...
 
 
+class RevisionAwareEngine(Protocol):
+    def update_session(self, update: SessionRevisionUpdate) -> None: ...
+
+
 class DeterministicEngine:
     """Local backend that exercises state transitions without a model download."""
 
     def __init__(self) -> None:
         self.prefill_calls: list[tuple[str, tuple[int, ...], int, bool]] = []
+        self.session_update_calls: list[SessionRevisionUpdate] = []
         self.generate_calls: list[EngineRequest] = []
         self.aborted: set[str] = set()
 
@@ -68,6 +98,15 @@ class DeterministicEngine:
             text=text,
             input_tokens=len(request.prompt_token_ids),
             output_tokens=len(text.split(":")),
+        )
+
+    def update_session(self, update: SessionRevisionUpdate) -> None:
+        self.session_update_calls.append(update)
+        self.prefill(
+            update.session_id,
+            update.replacement_token_ids,
+            update.version,
+            update.tentative,
         )
 
     def abort(self, request_id: str) -> bool:
@@ -138,7 +177,10 @@ class OpenAICompatibleEngine:
             output_tokens=int(usage.get("completion_tokens", 0)),
         )
 
+    def update_session(self, update: SessionRevisionUpdate) -> None:
+        # The OpenAI-compatible HTTP surface has no versioned prefill command.
+        del update
+
     def abort(self, request_id: str) -> bool:
         del request_id
         return False
-

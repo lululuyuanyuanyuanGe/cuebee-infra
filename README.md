@@ -12,7 +12,7 @@ This repository implements the system semantics around vLLM. It does not rebrand
 | Area | Implemented now | Hardware validation still required |
 |---|---|---|
 | Transcript runtime | Idempotent events, token-level diff, stable/tentative state, configurable tokenizer guard | Replay production STT traces after redaction |
-| Key-Value (KV) lifecycle | Logical references, reference counts, suffix rollback, COW, precise branch invalidation | Map transitions to pinned vLLM physical blocks |
+| Key-Value (KV) lifecycle | Logical references, COW, branch invalidation, and pinned vLLM physical suffix rollback | Validate hybrid-cache layouts and L4 traces |
 | Scheduling | Version, deadline, foreground, age, prefix reuse, cost, overload shedding | Tune weights on NVIDIA L4 traces |
 | Output safety | Abort propagation plus freshness gate | Inject abort/output races under vLLM load |
 | Speaker serving | VAD, deadline-aware micro-batching, stable Session Store, worker replacement, autoscaler | Replace deterministic worker with the frozen Open Neural Network Exchange (ONNX) model and collect latency |
@@ -57,7 +57,7 @@ curl -s -X POST http://127.0.0.1:8080/v1/scheduler/tick \
   -H 'content-type: application/json' -d '{}'
 ```
 
-The default model backend and speaker worker are deterministic so the complete state machine runs on a laptop. `OpenAICompatibleEngine` can send final prompts to a vLLM-compatible endpoint; direct physical KV block control remains the next version-specific integration step.
+The default model backend and speaker worker are deterministic so the complete state machine runs on a laptop. `OpenAICompatibleEngine` sends final prompts to a compatible endpoint. The `third_party/vllm` fork and `VLLMRevisionBridge` provide the in-process versioned input and physical KV suffix rollback path.
 
 ## Architecture
 
@@ -105,11 +105,13 @@ src/cuebee/
   scheduler.py         semantic admission and overload policy
   freshness_gate.py    final output consistency check
   engine.py            deterministic and vLLM-compatible HTTP backends
+  vllm_bridge.py       versioned in-process input stream for the pinned fork
   runtime.py           end-to-end orchestration
 benchmarks/             STT trace replay and speaker load generation
 demos/                  reproducible revision sequence
 docs/                   architecture, integration, experiments, and history
 tests/                  unit and integration coverage
+third_party/vllm/       pinned vLLM fork branch with physical suffix rollback
 ```
 
 See [architecture.md](docs/architecture.md), [vllm-integration.md](docs/vllm-integration.md), [benchmark-plan.md](docs/benchmark-plan.md), and [project-history.md](docs/project-history.md) for the implementation contract and evidence boundary.

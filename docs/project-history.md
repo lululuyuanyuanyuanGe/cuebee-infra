@@ -11,6 +11,9 @@ The project work represented here ran from April through July 2026. This local r
 | 2026-06-29 | Multi-tenant speaker service | Voice Activity Detection (VAD), micro-batching, stable identity, worker replacement, autoscaler |
 | 2026-07-12 | Runnable service and experiments | Hypertext Transfer Protocol (HTTP) interface, demo, trace replay, speaker load generator |
 | 2026-07-28 | Documentation and acceptance pass | Architecture, integration contract, benchmark plan, reproducible checks |
+| 2026-07-29 | Versioned vLLM protocol | Revision metadata across public input, frontend state, and engine process boundary |
+| 2026-07-30 | Physical suffix rollback | Full-attention KV block retention/release and scheduler regression tests |
+| 2026-07-31 | In-process bridge | Pinned fork submodule and bounded CueBee-to-vLLM revision stream |
 
 The dates can be audited with:
 

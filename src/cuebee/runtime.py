@@ -8,7 +8,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from cuebee.branch_graph import BranchGraph, TaskKind
-from cuebee.engine import DeterministicEngine, EngineRequest, EngineResult, InferenceEngine
+from cuebee.engine import (
+    DeterministicEngine,
+    EngineRequest,
+    EngineResult,
+    InferenceEngine,
+    SessionRevisionUpdate,
+)
 from cuebee.event_schema import EventType, STTEvent, TranscriptDiff
 from cuebee.freshness_gate import FreshnessGate, GateDecision
 from cuebee.kv_metadata import Validity, VersionedKVManager
@@ -135,20 +141,37 @@ class CueBeeRuntime:
             if resident != expected[: len(resident)]:
                 raise AssertionError("resident cache is not a prefix of the transcript")
 
-            should_prefill = normalized.type is EventType.COMMIT_FINAL or self.tentative_policy.admit(
-                normalized,
-                len(diff.new_tail_tokens),
-                self.gpu_load,
+            should_prefill = (
+                normalized.type is EventType.COMMIT_FINAL
+                or self.tentative_policy.admit(
+                    normalized,
+                    len(diff.new_tail_tokens),
+                    self.gpu_load,
+                )
             )
             if should_prefill:
                 missing = expected[len(resident) :]
                 if missing:
-                    self.engine.prefill(
-                        normalized.session_id,
-                        missing,
-                        diff.new_version,
-                        tentative=normalized.type is not EventType.COMMIT_FINAL,
-                    )
+                    update_session = getattr(self.engine, "update_session", None)
+                    if callable(update_session):
+                        update_session(
+                            SessionRevisionUpdate(
+                                session_id=normalized.session_id,
+                                version=diff.new_version,
+                                base_version=None,
+                                replace_from=len(resident),
+                                replacement_token_ids=tuple(missing),
+                                commit_frontier=state.commit_frontier,
+                                tentative=normalized.type is not EventType.COMMIT_FINAL,
+                            )
+                        )
+                    else:
+                        self.engine.prefill(
+                            normalized.session_id,
+                            missing,
+                            diff.new_version,
+                            tentative=normalized.type is not EventType.COMMIT_FINAL,
+                        )
                     self.kv.append_session(
                         normalized.session_id,
                         missing,
@@ -216,7 +239,10 @@ class CueBeeRuntime:
         return task
 
     def run_next(self, now: float | None = None) -> TaskOutcome | None:
-        versions = {snapshot["session_id"]: snapshot["version"] for snapshot in self.sessions.snapshots()}
+        versions = {
+            snapshot["session_id"]: snapshot["version"]
+            for snapshot in self.sessions.snapshots()
+        }
         task = self.scheduler.pop_next(versions, now=now)
         if task is None:
             return None
@@ -268,4 +294,3 @@ class CueBeeRuntime:
                 task for task in self.scheduler.snapshot() if task["session_id"] == session_id
             ],
         }
-
