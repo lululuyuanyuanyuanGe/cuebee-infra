@@ -53,6 +53,30 @@ class SessionRevisionUpdate:
             raise ValueError("replacement_token_ids must not be empty")
 
 
+@dataclass(frozen=True, slots=True)
+class BranchForkUpdate:
+    """Materialize one inference branch from a resident session prefix."""
+
+    source_session_id: str
+    branch_id: str
+    version: int
+    fork_at: int
+    prompt_token_ids: tuple[int, ...]
+    commit_frontier: int
+
+    def __post_init__(self) -> None:
+        if not self.source_session_id or not self.branch_id:
+            raise ValueError("source_session_id and branch_id must not be empty")
+        if self.source_session_id == self.branch_id:
+            raise ValueError("branch_id must differ from source_session_id")
+        if self.version < 0 or self.fork_at <= 0 or self.commit_frontier < 0:
+            raise ValueError("version and fork offsets must be valid")
+        if self.fork_at >= len(self.prompt_token_ids):
+            raise ValueError("a branch must append a private prompt suffix")
+        if self.commit_frontier > self.fork_at:
+            raise ValueError("commit_frontier cannot exceed fork_at")
+
+
 class InferenceEngine(Protocol):
     def prefill(
         self,

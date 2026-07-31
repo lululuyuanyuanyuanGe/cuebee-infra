@@ -14,6 +14,7 @@ The project work represented here ran from April through July 2026. This local r
 | 2026-07-29 | Versioned vLLM protocol | Revision metadata across public input, frontend state, and engine process boundary |
 | 2026-07-30 | Physical suffix rollback | Full-attention KV block retention/release and scheduler regression tests |
 | 2026-07-31 | In-process bridge | Pinned fork submodule and bounded CueBee-to-vLLM revision stream |
+| 2026-07-31 | Batched partial-block COW | Resident branch protocol, reference-safe scheduler materialization, Compute Unified Device Architecture (CUDA) valid-prefix copy, correctness tests, and L4 benchmark harness |
 
 The dates can be audited with:
 

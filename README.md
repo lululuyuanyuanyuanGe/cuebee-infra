@@ -12,7 +12,7 @@ This repository implements the system semantics around vLLM. It does not rebrand
 | Area | Implemented now | Hardware validation still required |
 |---|---|---|
 | Transcript runtime | Idempotent events, token-level diff, stable/tentative state, configurable tokenizer guard | Replay production STT traces after redaction |
-| Key-Value (KV) lifecycle | Logical references, COW, branch invalidation, and pinned vLLM physical suffix rollback | Validate hybrid-cache layouts and L4 traces |
+| Key-Value (KV) lifecycle | Logical references, branch invalidation, physical suffix rollback, and batched partial-block COW in the pinned vLLM fork | Compile and benchmark the Compute Unified Device Architecture (CUDA) kernel on NVIDIA L4; validate additional cache layouts |
 | Scheduling | Version, deadline, foreground, age, prefix reuse, cost, overload shedding | Tune weights on NVIDIA L4 traces |
 | Output safety | Abort propagation plus freshness gate | Inject abort/output races under vLLM load |
 | Speaker serving | VAD, deadline-aware micro-batching, stable Session Store, worker replacement, autoscaler | Replace deterministic worker with the frozen Open Neural Network Exchange (ONNX) model and collect latency |
@@ -57,7 +57,7 @@ curl -s -X POST http://127.0.0.1:8080/v1/scheduler/tick \
   -H 'content-type: application/json' -d '{}'
 ```
 
-The default model backend and speaker worker are deterministic so the complete state machine runs on a laptop. `OpenAICompatibleEngine` sends final prompts to a compatible endpoint. The `third_party/vllm` fork and `VLLMRevisionBridge` provide the in-process versioned input and physical KV suffix rollback path.
+The default model backend and speaker worker are deterministic so the complete state machine runs on a laptop. `OpenAICompatibleEngine` sends final prompts to a compatible endpoint. The `third_party/vllm` fork and `VLLMRevisionBridge` provide the in-process versioned input, physical KV suffix rollback, and partial-block branch materialization path.
 
 ## Architecture
 
@@ -111,7 +111,7 @@ benchmarks/             STT trace replay and speaker load generation
 demos/                  reproducible revision sequence
 docs/                   architecture, integration, experiments, and history
 tests/                  unit and integration coverage
-third_party/vllm/       pinned vLLM fork branch with physical suffix rollback
+third_party/vllm/       pinned vLLM fork with rollback and partial-block COW CUDA kernel
 ```
 
 See [architecture.md](docs/architecture.md), [vllm-integration.md](docs/vllm-integration.md), [benchmark-plan.md](docs/benchmark-plan.md), and [project-history.md](docs/project-history.md) for the implementation contract and evidence boundary.

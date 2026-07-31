@@ -25,7 +25,9 @@ On revision, the runtime retokenizes the full hypothesis with the model tokenize
 | Ownership | Spine, Shared, Branch Private | Which logical consumer owns the reference |
 | Residency | Graphics Processing Unit, Central Processing Unit, Evicted | Where a physical implementation currently places the block |
 
-The local `BlockPool` is a deterministic physical-block model used to prove reference counting and Copy-on-Write (COW) transitions. When a shared partial block must be extended or truncated, the mutating owner receives a copy while other branches retain the old view.
+The local `BlockPool` is a deterministic physical-block model used to prove reference counting and Copy-on-Write (COW) transitions. The pinned vLLM fork implements the corresponding physical path: a branch increments references for complete blocks, allocates one private destination when the fork point is inside a block, and submits a batched partial-block COW Compute Unified Device Architecture (CUDA) kernel that copies only the valid KV prefix.
+
+Source and destination blocks receive temporary scheduler references until model execution returns. This lifetime rule keeps block identifiers stable even if another Session revision, cancellation, or preemption arrives while the copy is queued on the GPU stream.
 
 ## Branch dependencies
 
@@ -67,4 +69,3 @@ sequenceDiagram
     M->>R: Candidate output
     R->>R: Freshness gate allows version 43
 ```
-

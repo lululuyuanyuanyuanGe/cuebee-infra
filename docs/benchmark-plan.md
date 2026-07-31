@@ -33,9 +33,10 @@ The baseline enables Automatic Prefix Caching (APC); CueBee adds logical Key-Val
 | V1 | Upstream APC | Native prefix reuse |
 | V2 | V1 plus persistent committed spine | Session-level stable reuse |
 | V3 | V2 plus tentative prefill and suffix rollback | Revision benefit and rollback cost |
-| V4 | V3 plus COW branches and semantic scheduler | Multi-task sharing and stale compute |
+| V4 | V3 plus logical COW branches and semantic scheduler | Multi-task sharing and stale compute |
+| V5 | V4 plus physical partial-block COW and batched Compute Unified Device Architecture (CUDA) copy | Branch materialization latency under concurrent revisions |
 
-Report Time to First Token (TTFT), Inter-Token Latency (ITL), end-to-end latency, prefill tokens, KV reuse, rollback tokens, stale compute, deadline misses, cancellation latency, memory, and goodput.
+Report Time to First Token (TTFT), Inter-Token Latency (ITL), end-to-end latency, prefill tokens, KV reuse, rollback tokens, stale compute, deadline misses, cancellation latency, branch materialization latency, COW bytes, copy-kernel launches, memory, and goodput.
 
 ## Execution rules
 
@@ -51,6 +52,9 @@ Report Time to First Token (TTFT), Inter-Token Latency (ITL), end-to-end latency
 ```bash
 make benchmark-stt
 make benchmark-speaker
+cd third_party/vllm
+.venv/bin/python benchmarks/kernels/benchmark_partial_block_cow.py \
+  --batch-size 128 --num-layers 36 --block-size 16
 ```
 
-`stt_trace_replay.py` reports the full-history token baseline, incremental prefill tokens, rollback tokens, and logical block state. `speaker_loadgen.py` exercises cross-session batch formation and emits batch and queue distributions. Both are harness smoke tests, not L4 performance claims.
+`stt_trace_replay.py` reports the full-history token baseline, incremental prefill tokens, rollback tokens, and logical block state. `speaker_loadgen.py` exercises cross-session batch formation and emits batch and queue distributions. `benchmark_partial_block_cow.py` compares one cross-Session batched kernel path against per-branch tensor copies. These are harness entry points, not L4 performance claims until their raw GPU run metadata is recorded.
