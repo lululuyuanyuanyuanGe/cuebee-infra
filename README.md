@@ -59,6 +59,55 @@ curl -s -X POST http://127.0.0.1:8080/v1/scheduler/tick \
 
 The default model backend and speaker worker are deterministic so the complete state machine runs on a laptop. `OpenAICompatibleEngine` sends final prompts to a compatible endpoint. The `third_party/vllm` fork and `VLLMRevisionBridge` provide the in-process versioned input, physical KV suffix rollback, and partial-block branch materialization path.
 
+## Stateful branch materialization
+
+The vLLM fork implements physical branch reuse instead of rebuilding every analysis prompt from its complete conversation history. For a 16-token KV block, a branch at token 20 behaves as follows:
+
+```text
+source:  [block 10: tokens 0..15] [block 11: tokens 16..19 | unused tail]
+branch:  [block 10: shared       ] [block 42: copied prefix | private tail]
+```
+
+Complete blocks remain shared by reference. Only the valid four-token prefix of the incomplete source block is copied into a private destination block. New task-prompt tokens can then extend the destination without modifying the source Session.
+
+The implementation is an end-to-end path in the pinned [`agentKV` branch](https://github.com/lululuyuanyuanyuanGe/agentKV/tree/cuebee-v0.23.0):
+
+| Layer | Implementation | Responsibility |
+|---|---|---|
+| Public protocol | [`StreamingFork`](https://github.com/lululuyuanyuanyuanGe/agentKV/blob/cuebee-v0.23.0/vllm/v1/engine/__init__.py) and [`BranchForkUpdate`](src/cuebee/engine.py) | Carry source Session, source version, fork offset, and branch identity |
+| Scheduler | [`KVCacheManager.fork_request`](https://github.com/lululuyuanyuanyuanGe/agentKV/blob/cuebee-v0.23.0/vllm/v1/core/kv_cache_manager.py) | Validate resident source state, share complete blocks, allocate a private partial block, and emit copy plans |
+| Model runner | [`BatchedPartialBlockCopyManager`](https://github.com/luluyuanyuanyuanGe/agentKV/blob/cuebee-v0.23.0/vllm/v1/worker/utils.py) | Group concurrent Session plans by cache group and compatible memory layout |
+| Native extension | [`batched_partial_block_copy_kernel`](https://github.com/lululuyuanyuanyuanGe/agentKV/blob/cuebee-v0.23.0/csrc/libtorch_stable/cache_kernels.cu) in C++/CUDA | Copy only valid KV bytes across all participating layers in one batched launch per layout |
+| Lifetime barrier | Source and destination reference pins | Prevent revision, cancellation, or preemption from recycling a block while its asynchronous copy is queued |
+
+The Graphics Processing Unit (GPU) mapping is prepared once per cache layout. Each model step transfers a compact `(source_block, destination_block, valid_tokens)` plan array, then launches the copy before branch suffix prefill. Unsupported layouts fail closed rather than silently falling back to incorrect cache reuse. The current reference path supports resident tokenized full-attention requests; connector-backed KV, multimodal prompts, per-token-head quantization, NVIDIA 4-bit floating-point (NVFP4) KV cache, and routing across multiple data-parallel ranks require additional integration.
+
+### Reproducing the checks
+
+Run the control-plane and scheduler tests on a laptop:
+
+```bash
+make test
+
+cd third_party/vllm
+.venv/bin/python -m pytest \
+  tests/v1/streaming_input/test_scheduler_streaming.py \
+  tests/v1/streaming_input/test_partial_block_cow.py \
+  tests/v1/streaming_input/test_async_llm_streaming.py -q
+```
+
+On an NVIDIA CUDA machine, run the prefix/tail correctness test and microbenchmark:
+
+```bash
+.venv/bin/python -m pytest \
+  tests/kernels/test_cache_kernels.py::test_batched_partial_block_copy_preserves_private_tail -q
+
+.venv/bin/python benchmarks/kernels/benchmark_partial_block_cow.py \
+  --batch-size 128 --num-layers 36 --block-size 16
+```
+
+The benchmark compares one cross-Session batched operation with per-branch tensor-copy launches and reports median microseconds and speedup. The harness is checked in, but this repository does not claim an NVIDIA L4 result until raw run metadata is recorded.
+
 ## Architecture
 
 ```mermaid
@@ -75,6 +124,9 @@ flowchart LR
     Spine --> KV[Logical KV manager]
     KV --> Branch[Shared branch graph]
     Branch --> Scheduler[Version and deadline scheduler]
+    Scheduler --> ForkPlan[Resident KV fork plans]
+    ForkPlan --> PartialCOW[Batched partial-block COW]
+    PartialCOW --> Engine
     Scheduler --> Engine[vLLM or deterministic engine]
     Engine --> Gate[Freshness gate]
     Gate --> Output[Hint, search, memory, summary]
